@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A股要闻看板 · 个人自用</title>
+<style>
+:root {
+  --bg0: #050814;
+  --bg1: #0a1024;
+  --cyan: #22d3ee;
+  --blue: #3b82f6;
+  --violet: #a78bfa;
+  --pink: #e879f9;
+  --text: #e8f1ff;
+  --muted: #93a4c3;
+  --glass: rgba(12, 20, 48, 0.55);
+  --glass2: rgba(18, 28, 64, 0.72);
+  --border: rgba(34, 211, 238, 0.35);
+  --glow: 0 0 12px rgba(34,211,238,.45), 0 0 28px rgba(59,130,246,.25);
+  --glow-strong: 0 0 16px rgba(34,211,238,.75), 0 0 40px rgba(59,130,246,.4), inset 0 0 20px rgba(34,211,238,.08);
+  --danger: #fb7185;
+  --ok: #34d399;
+  --base: 16px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; min-height: 100%; }
+body {
+  font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: var(--base);
+  line-height: 1.55;
+  color: var(--text);
+  background: radial-gradient(ellipse at 20% 0%, #12204a 0%, var(--bg0) 55%), var(--bg0);
+  overflow-x: hidden;
+}
+#starfield {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: transparent;
+}
+.wrap { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 16px 14px 48px; }
+
+/* Header */
+.header {
+  display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--glow);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .header, .card, .filters, .timeline-box, .legend { background: var(--glass2); }
+}
+.brand h1 {
+  margin: 0 0 6px;
+  font-size: clamp(1.25rem, 3.5vw, 1.75rem);
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--cyan), var(--blue), var(--violet));
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 24px rgba(34,211,238,.35);
+  filter: drop-shadow(0 0 8px rgba(34,211,238,.45));
+}
+.brand .sub { color: var(--muted); font-size: .9rem; margin: 0; }
+.brand .meta { color: var(--cyan); font-size: .85rem; margin-top: 6px; opacity: .9; }
+
+/* Clock */
+.clock-frame {
+  min-width: 220px;
+  padding: 10px 14px;
+  border: 1px solid rgba(34,211,238,.55);
+  border-radius: 12px;
+  box-shadow: var(--glow), inset 0 0 18px rgba(34,211,238,.08);
+  background: rgba(5,10,28,.65);
+  text-align: right;
+}
+.clock-label { font-size: .72rem; letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.clock-digits {
+  font-family: "SF Mono", "Cascadia Code", "Consolas", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(1.35rem, 4vw, 1.85rem);
+  font-weight: 700;
+  letter-spacing: .06em;
+  background: linear-gradient(180deg, #a5f3fc, #22d3ee 40%, #6366f1);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 6px rgba(34,211,238,.7));
+  line-height: 1.2;
+}
+.clock-date { font-size: .85rem; color: var(--text); margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+/* Filters */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-bottom: 14px; padding: 10px 12px;
+  background: var(--glass); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: var(--glow); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.filters button {
+  appearance: none; border: 1px solid rgba(34,211,238,.35);
+  background: rgba(10,18,40,.6); color: var(--text);
+  padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  font-size: .95rem; transition: .2s ease;
+}
+.filters button:hover, .filters button.active {
+  border-color: var(--cyan); color: #ecfeff;
+  box-shadow: 0 0 14px rgba(34,211,238,.55);
+  background: rgba(34,211,238,.15);
+}
+
+/* Column headers */
+.col-heads {
+  display: grid; grid-template-columns: 1.1fr 0.9fr 1.1fr; gap: 12px;
+  margin-bottom: 8px; padding: 0 4px;
+}
+.col-heads span {
+  font-size: .8rem; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--cyan); opacity: .85;
+}
+@media (max-width: 860px) { .col-heads { display: none; } }
+
+/* News rows */
+.news-list { display: flex; flex-direction: column; gap: 12px; }
+.news-row {
+  display: grid; grid-template-columns: 1.1fr 0.9fr 1.1fr; gap: 12px;
+  transition: opacity .45s ease, transform .45s ease, filter .25s ease;
+}
+.news-row.dim { filter: brightness(.38) saturate(.5); opacity: .45; }
+.news-row.hot .card { box-shadow: var(--glow-strong); border-color: rgba(34,211,238,.85); }
+
+.card {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 14px 12px;
+  box-shadow: var(--glow);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  min-height: 100%;
+  transition: box-shadow .25s ease, border-color .25s ease, transform .2s ease;
+}
+.card:hover { transform: translateY(-1px); }
+
+.rank {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px; margin-right: 8px;
+  font-weight: 700; font-size: .85rem;
+  background: linear-gradient(135deg, rgba(34,211,238,.25), rgba(99,102,241,.35));
+  border: 1px solid rgba(34,211,238,.5);
+  color: #a5f3fc;
+  vertical-align: middle;
+}
+.tag {
+  display: inline-block; font-size: .72rem; padding: 2px 8px; border-radius: 999px;
+  margin-right: 6px; vertical-align: middle;
+  border: 1px solid rgba(167,139,250,.5); color: #ddd6fe;
+  background: rgba(167,139,250,.12);
+}
+.tag.政策面 { border-color: rgba(34,211,238,.55); color: #a5f3fc; background: rgba(34,211,238,.12); }
+.tag.行业面 { border-color: rgba(52,211,153,.55); color: #a7f3d0; background: rgba(52,211,153,.12); }
+.tag.市场面 { border-color: rgba(251,113,133,.55); color: #fecdd3; background: rgba(251,113,133,.12); }
+
+.news-title {
+  margin: 8px 0 6px; font-size: 1.02rem; font-weight: 650;
+  background: linear-gradient(90deg, #ecfeff, #c4b5fd);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 4px rgba(34,211,238,.25));
+}
+.news-meta { font-size: .85rem; color: var(--muted); }
+.news-meta a { color: var(--cyan); text-decoration: none; border-bottom: 1px dashed rgba(34,211,238,.4); }
+.news-meta a:hover { color: #fff; border-bottom-color: #fff; }
+
+.sector-pill, .stock-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin: 4px 6px 4px 0; padding: 5px 10px;
+  border-radius: 10px; font-size: .88rem;
+  border: 1px solid rgba(59,130,246,.4);
+  background: rgba(59,130,246,.1); color: #bfdbfe;
+  transition: box-shadow .2s, border-color .2s, background .2s;
+}
+.sector-pill.lit, .stock-chip.lit {
+  border-color: var(--cyan);
+  background: rgba(34,211,238,.18);
+  box-shadow: 0 0 14px rgba(34,211,238,.65);
+  color: #ecfeff;
+}
+.stock-chip { flex-direction: column; align-items: flex-start; min-width: 118px; }
+.stock-chip .code {
+  font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums;
+  font-size: .78rem; color: var(--cyan); letter-spacing: .04em;
+}
+.stock-chip .name { font-weight: 600; }
+.lbl {
+  display: inline-block; font-size: .68rem; padding: 1px 6px; border-radius: 6px;
+  margin-top: 3px; margin-right: 4px;
+  border: 1px solid rgba(34,211,238,.35); color: #a5f3fc;
+}
+.lbl.zt { border-color: rgba(251,113,133,.55); color: #fecdd3; background: rgba(251,113,133,.12); }
+.lbl.ld { border-color: rgba(52,211,153,.45); color: #a7f3d0; background: rgba(52,211,153,.1); }
+.lbl.gg { border-color: rgba(250,204,21,.5); color: #fef08a; background: rgba(250,204,21,.1); }
+
+.card h3 {
+  margin: 0 0 8px; font-size: .78rem; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted); font-weight: 600;
+}
+
+@media (max-width: 860px) {
+  .news-row { grid-template-columns: 1fr; gap: 8px; }
+  .news-row .card { min-height: 0; }
+  .clock-frame { text-align: left; width: 100%; }
+  .header { flex-direction: column; }
+}
+
+/* Timeline section */
+.section-title {
+  margin: 28px 0 12px;
+  font-size: clamp(1.1rem, 3vw, 1.4rem);
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--cyan), var(--violet));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 8px rgba(34,211,238,.4));
+}
+.timeline-box {
+  position: relative;
+  max-height: 520px;
+  overflow-y: auto;
+  padding: 18px 16px 18px 8px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--glow);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34,211,238,.55) rgba(10,16,40,.4);
+}
+.timeline-box::-webkit-scrollbar { width: 8px; }
+.timeline-box::-webkit-scrollbar-track { background: rgba(10,16,40,.4); border-radius: 8px; }
+.timeline-box::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--cyan), var(--violet));
+  border-radius: 8px; box-shadow: 0 0 8px rgba(34,211,238,.5);
+}
+.timeline { position: relative; padding-left: 28px; }
+.timeline::before {
+  content: ""; position: absolute; left: 11px; top: 8px; bottom: 8px; width: 2px;
+  background: linear-gradient(180deg, var(--cyan), var(--blue), var(--violet));
+  box-shadow: 0 0 10px rgba(34,211,238,.7);
+  border-radius: 2px;
+}
+.t-node {
+  position: relative; margin-bottom: 16px; padding: 12px 14px;
+  border: 1px solid rgba(34,211,238,.28); border-radius: 12px;
+  background: rgba(8,14,36,.55);
+  transition: box-shadow .25s, border-color .25s, filter .25s, opacity .25s;
+  cursor: pointer;
+}
+.t-node:last-child { margin-bottom: 0; }
+.t-node::before {
+  content: ""; position: absolute; left: -23px; top: 18px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 10px rgba(34,211,238,.9), 0 0 20px rgba(59,130,246,.5);
+  border: 2px solid #0b1228;
+}
+.t-node.soon::before { background: var(--pink); box-shadow: 0 0 12px rgba(232,121,249,.95); }
+.t-node.dim { filter: brightness(.38) saturate(.5); opacity: .45; }
+.t-node.hot { border-color: rgba(34,211,238,.85); box-shadow: var(--glow-strong); }
+.t-date {
+  font-family: ui-monospace, monospace; font-variant-numeric: tabular-nums;
+  color: var(--cyan); font-size: .85rem; letter-spacing: .04em;
+}
+.soon-badge {
+  display: inline-block; margin-left: 8px; font-size: .7rem;
+  padding: 1px 8px; border-radius: 999px;
+  border: 1px solid rgba(232,121,249,.6); color: #f5d0fe;
+  background: rgba(232,121,249,.15);
+  animation: pulse 1.8s ease-in-out infinite;
+}
+.t-title { margin: 4px 0 8px; font-weight: 650; font-size: 1rem; }
+.t-body { display: flex; flex-wrap: wrap; gap: 8px 4px; align-items: flex-start; }
+
+.legend {
+  margin-top: 14px; padding: 12px 14px; font-size: .85rem; color: var(--muted);
+  background: var(--glass); border: 1px dashed rgba(34,211,238,.3); border-radius: 12px;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.footer {
+  margin-top: 20px; text-align: center; color: var(--muted); font-size: .8rem;
+}
+
+/* Loading overlay */
+#loader { display: none; }
+html.js-anim #loader {
+  position: fixed; inset: 0; z-index: 100;
+  background: radial-gradient(ellipse at center, #0c1636 0%, #050814 70%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transition: opacity .6s ease, visibility .6s;
+}
+#loader.done { opacity: 0; visibility: hidden; pointer-events: none; }
+#scan {
+  position: absolute; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--violet), transparent);
+  box-shadow: 0 0 20px rgba(34,211,238,.9);
+  animation: scan 1.8s linear infinite;
+}
+@keyframes scan {
+  0% { top: 8%; opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { top: 92%; opacity: 0; }
+}
+#stream {
+  position: absolute; inset: 0; overflow: hidden; opacity: .35;
+  font-family: ui-monospace, monospace; font-size: 13px; color: var(--cyan);
+  pointer-events: none; white-space: pre; line-height: 1.2;
+}
+.loader-panel {
+  position: relative; z-index: 2; text-align: center;
+  padding: 24px 28px; border: 1px solid rgba(34,211,238,.5); border-radius: 16px;
+  background: rgba(8,14,36,.7); box-shadow: var(--glow-strong);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.loader-panel .glow-text {
+  font-size: 1.15rem; letter-spacing: .2em;
+  background: linear-gradient(90deg, var(--cyan), var(--violet));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 8px rgba(34,211,238,.6));
+}
+.loader-panel .readout {
+  margin-top: 10px; font-family: ui-monospace, monospace;
+  font-variant-numeric: tabular-nums; color: var(--muted); font-size: .9rem;
+}
+@keyframes pulse {
+  0%,100% { opacity: .7; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #scan, .soon-badge { animation: none !important; }
+  .news-row { transition: none; opacity: 1; transform: none; }
+  #loader { transition: opacity .2s; }
+}
+
+html.js-anim .news-row { opacity: 0; transform: translateY(10px); }
+html.js-anim .news-row.visible, .news-row.visible { opacity: 1; transform: none; }
+html.js-anim .news-row.dim { opacity: .45; }
+.hidden-cat { display: none !important; }
+</style>
+<noscript><style>#loader{display:none!important}.news-row{opacity:1!important;transform:none!important}</style></noscript>
+<script>
+try { if (!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) { document.documentElement.className += ' js-anim'; } } catch (e) {}
+setTimeout(function () { try { document.documentElement.className = document.documentElement.className.replace(/\bjs-anim\b/g, ''); } catch (e) {} }, 4000);
+</script>
+</head>
+<body>
+<canvas id="starfield" aria-hidden="true"></canvas>
+<div id="loader" role="status" aria-live="polite">
+  <div id="stream"></div><div id="scan"></div>
+  <div class="loader-panel"><div class="glow-text">SYSTEM BOOT · A股数据流</div>
+  <div class="readout" id="loadReadout">初始化链路… 0%</div></div>
+</div>
+<div class="wrap">
+  <header class="header">
+    <div class="brand">
+      <h1>A股要闻看板</h1>
+      <p class="sub">个人自用 · 仅供参考，不构成买卖建议</p>
+      <p class="meta">数据日 2026-10-19（周一） · 截止 2026-10-20 00:30（北京时间） · 精选 50 条 / 大事 15 条</p>
+    </div>
+    <div class="clock-frame" aria-label="北京时间">
+      <div class="clock-label">北京时间 · Asia/Shanghai</div>
+      <div class="clock-digits" id="clockTime">--:--:--</div>
+      <div class="clock-date" id="clockDate">开启 JavaScript 后显示实时时钟</div>
+    </div>
+  </header>
+  <div class="filters" id="filters">
+    <button type="button" data-cat="全部" class="active">全部</button>
+    <button type="button" data-cat="政策面">政策面</button>
+    <button type="button" data-cat="行业面">行业面</button>
+    <button type="button" data-cat="市场面">市场面</button>
+  </div>
+  <div class="col-heads"><span>新闻 / 事件</span><span>发酵板块</span><span>关注三只票（仅参考）</span></div>
+  <div class="news-list" id="newsList">
+<article class="news-row" data-news-id="n01" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">01</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">前三季度GDP同比增长4.6%，地产投资下降20.6%</div>
+    <div class="news-meta">10-19 10:00 · <a href="https://www.stats.gov.cn/sj/zxfbhjd/202610/t20261019_1965618.html" target="_blank" rel="noopener">国家统计局</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">宏观</span><span class="sector-pill">高技术制造</span><span class="sector-pill">地产链（偏空）</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="601398"><span class="code">601398</span><span class="name">工商银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601939"><span class="code">601939</span><span class="name">建设银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n02" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">02</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">潘功胜：设立非银机构大额赎回流动性支持工具，拟退出存贷款基准利率</div>
+    <div class="news-meta">10-19 16:26 · <a href="https://www.cls.cn/detail/2508535" target="_blank" rel="noopener">财联社 / 外汇局</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">债市</span><span class="sector-pill">银行理财</span><span class="sector-pill">公募</span><span class="sector-pill">券商资管</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="601318"><span class="code">601318</span><span class="name">中国平安</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601398"><span class="code">601398</span><span class="name">工商银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n03" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">03</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">央行等11部门印发金融支持三大国际科创中心指导意见</div>
+    <div class="news-meta">10-19 18:22 · <a href="https://www.cls.cn/detail/2508759" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">科技金融</span><span class="sector-pill">创投</span><span class="sector-pill">券商投行</span><span class="sector-pill">算力服务出海</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601995"><span class="code">601995</span><span class="name">中金公司</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601688"><span class="code">601688</span><span class="name">华泰证券</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n04" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">04</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">吴清：首批18只主动ETF获批，本周五发行；再融资办法择机发布</div>
+    <div class="news-meta">10-19 17:08 · <a href="https://www.csrc.gov.cn/csrc/c106311/c7665578/content.shtml" target="_blank" rel="noopener">证监会 / 上交所</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">公募ETF</span><span class="sector-pill">券商</span><span class="sector-pill">再融资</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601688"><span class="code">601688</span><span class="name">华泰证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601995"><span class="code">601995</span><span class="name">中金公司</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n05" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">05</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">证监会发布违规转让证券处罚规则，12月1日起施行；先行赔付征求意见</div>
+    <div class="news-meta">10-19 18:43 · <a href="https://www.csrc.gov.cn/csrc/c101954/c7665433/content.shtml" target="_blank" rel="noopener">证监会</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">减持监管</span><span class="sector-pill">解禁股（风险）</span><span class="sector-pill">投资者保护</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603225"><span class="code">603225</span><span class="name">新凤鸣</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002653"><span class="code">002653</span><span class="name">海思科</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="001309"><span class="code">001309</span><span class="name">德明利</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n06" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">06</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">朱鹤新：扩大证券公司结售汇业务试点，推出跨境便利化增量措施</div>
+    <div class="news-meta">10-19 17:33 · <a href="https://www.cls.cn/detail/2508673" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">券商</span><span class="sector-pill">外贸</span><span class="sector-pill">人民币国际化</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601995"><span class="code">601995</span><span class="name">中金公司</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601688"><span class="code">601688</span><span class="name">华泰证券</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n07" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">07</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">商务部：盾构机出口管制、无人机管制优化，11月18日起实施</div>
+    <div class="news-meta">10-19 15:02 · <a href="https://www.cls.cn/detail/2508327" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">工程机械</span><span class="sector-pill">民用无人机</span><span class="sector-pill">低空经济</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600528"><span class="code">600528</span><span class="name">中铁工业</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002389"><span class="code">002389</span><span class="name">航天彩虹</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002085"><span class="code">002085</span><span class="name">万丰奥威</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n08" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">08</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">商务部回应英方拟联手欧盟限制中国电动车：将坚决反制</div>
+    <div class="news-meta">10-19 22:00 · <a href="https://www.cls.cn/detail/2508985" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">整车出口</span><span class="sector-pill">新能源车（贸易摩擦）</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002594"><span class="code">002594</span><span class="name">比亚迪</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601633"><span class="code">601633</span><span class="name">长城汽车</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600686"><span class="code">600686</span><span class="name">金龙汽车</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n09" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">09</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">TrendForce：2026年全球光纤供需缺口1.8亿芯公里，订单排至27Q1</div>
+    <div class="news-meta">10-19 16:06 · <a href="https://www.cls.cn/detail/2508512" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">光纤光缆</span><span class="sector-pill">光通信</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600487"><span class="code">600487</span><span class="name">亨通光电</span><span><span class="lbl zt">当天涨停</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="601869"><span class="code">601869</span><span class="name">长飞光纤</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600522"><span class="code">600522</span><span class="name">中天科技</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n10" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">10</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">亨通光电：前三季度净利润预增151%—168%，当日涨停</div>
+    <div class="news-meta">10-19 10:50 · <a href="https://www.cls.cn/detail/2507983" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">光纤光缆</span><span class="sector-pill">海缆</span><span class="sector-pill">光通信</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600487"><span class="code">600487</span><span class="name">亨通光电</span><span><span class="lbl zt">当天涨停</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="601869"><span class="code">601869</span><span class="name">长飞光纤</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600522"><span class="code">600522</span><span class="name">中天科技</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n11" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">11</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">海光信息三季报：前三季度净利同比+45.12%；长鑫科技订单饱满</div>
+    <div class="news-meta">10-19 18:36 · <a href="https://www.cls.cn/detail/2508785" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">国产算力芯片</span><span class="sector-pill">存储</span><span class="sector-pill">半导体设备</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603019"><span class="code">603019</span><span class="name">中科曙光</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="603986"><span class="code">603986</span><span class="name">兆易创新</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002371"><span class="code">002371</span><span class="name">北方华创</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n12" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">12</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">协创数据子公司签不超过374.9亿元算力云服务协议；移远通信Q3净利+132%</div>
+    <div class="news-meta">10-19 18:01 · <a href="https://www.cls.cn/detail/2508715" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">算力租赁</span><span class="sector-pill">IT服务</span><span class="sector-pill">物联网模组</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002929"><span class="code">002929</span><span class="name">润建股份</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603236"><span class="code">603236</span><span class="name">移远通信</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="002368"><span class="code">002368</span><span class="name">太极股份</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n13" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">13</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">PCB三季报预喜率100%；鹏鼎控股拟回购3—5亿元，骏亚科技Q3扭亏</div>
+    <div class="news-meta">10-19 17:24 · <a href="https://www.cls.cn/detail/2508663" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">PCB</span><span class="sector-pill">覆铜板</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002938"><span class="code">002938</span><span class="name">鹏鼎控股</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="603386"><span class="code">603386</span><span class="name">骏亚科技</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="605258"><span class="code">605258</span><span class="name">协和电子</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n14" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">14</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">我国首批六项人形机器人国家标准发布，拟2027年4月实施</div>
+    <div class="news-meta">10-19 10:55 · <a href="https://www.cls.cn/detail/2507988" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">人形机器人</span><span class="sector-pill">灵巧手</span><span class="sector-pill">减速器</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="003021"><span class="code">003021</span><span class="name">兆威机电</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603119"><span class="code">603119</span><span class="name">浙江荣泰</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002164"><span class="code">002164</span><span class="name">宁波东力</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n15" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">15</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">英伟达GTC柏林10/20—22举行，黄仁勋主题演讲约北京时间10/21 17:00</div>
+    <div class="news-meta">10-19 13:23 · <a href="https://www.nvidia.com/de-de/gtc/" target="_blank" rel="noopener">NVIDIA / 财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">物理AI</span><span class="sector-pill">人形机器人</span><span class="sector-pill">AI基础设施</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="003021"><span class="code">003021</span><span class="name">兆威机电</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603119"><span class="code">603119</span><span class="name">浙江荣泰</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="601689"><span class="code">601689</span><span class="name">拓普集团</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n16" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">16</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">《新闻联播》：我国已建成完备新型储能产业链；发改委征求电力现货规则意见</div>
+    <div class="news-meta">10-19 19:34 · <a href="https://tv.cctv.com/2026/10/19/VIDE2A9EDeboZR0uJfLBLj9V261019.shtml" target="_blank" rel="noopener">央视网 / 财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">新型储能</span><span class="sector-pill">电力</span><span class="sector-pill">售电</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603693"><span class="code">603693</span><span class="name">江苏新能</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="600032"><span class="code">600032</span><span class="name">浙江新能</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="601778"><span class="code">601778</span><span class="name">晶科科技</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n17" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">17</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">2026中国汽车供应链大会开幕，汽车零部件掀涨停潮</div>
+    <div class="news-meta">10-19 盘中 · <a href="http://www.zqrb.cn/stock/redian/2026-10-19/A1792400055834.html" target="_blank" rel="noopener">证券日报 / 中汽协</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">汽车零部件</span><span class="sector-pill">轻量化压铸</span><span class="sector-pill">低空映射</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002085"><span class="code">002085</span><span class="name">万丰奥威</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603197"><span class="code">603197</span><span class="name">保隆科技</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603348"><span class="code">603348</span><span class="name">文灿股份</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n18" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">18</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">三峡新材拟发股加现金收购电解液企业珠海赛纬，10月20日复牌</div>
+    <div class="news-meta">10-19 19:27 · <a href="https://www.cls.cn/detail/2508838" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">电解液</span><span class="sector-pill">锂电材料</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600293"><span class="code">600293</span><span class="name">三峡新材</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="603659"><span class="code">603659</span><span class="name">璞泰来</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="002709"><span class="code">002709</span><span class="name">天赐材料</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n19" data-cat="市场面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">19</span><span class="tag 市场面">市场面</span></div>
+    <div class="news-title">美股盘中费城半导体涨3.4%，存储与光通信股走强（无收盘数据）</div>
+    <div class="news-meta">10-19 23:30 · <a href="https://www.cls.cn/detail/2509030" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">半导体映射</span><span class="sector-pill">存储</span><span class="sector-pill">光通信</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603986"><span class="code">603986</span><span class="name">兆易创新</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600487"><span class="code">600487</span><span class="name">亨通光电</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002371"><span class="code">002371</span><span class="name">北方华创</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n20" data-cat="市场面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">20</span><span class="tag 市场面">市场面</span></div>
+    <div class="news-title">10月最后两周约1976亿元解禁；10-20颀中科技解禁约109亿元</div>
+    <div class="news-meta">10-19 17:12 · <a href="https://www.yicai.com/news/103399113.html" target="_blank" rel="noopener">第一财经</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">解禁（风险）</span><span class="sector-pill">半导体材料封测</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603225"><span class="code">603225</span><span class="name">新凤鸣</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002653"><span class="code">002653</span><span class="name">海思科</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="001309"><span class="code">001309</span><span class="name">德明利</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n21" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">21</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">国常会：深化拓展“人工智能+”行动，依法治理低价无序竞争</div>
+    <div class="news-meta">10-16会议/10-19 08:00 · <a href="https://www.cls.cn/detail/2507796" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">AI应用</span><span class="sector-pill">算力</span><span class="sector-pill">反内卷</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002368"><span class="code">002368</span><span class="name">太极股份</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603859"><span class="code">603859</span><span class="name">能科科技</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002929"><span class="code">002929</span><span class="name">润建股份</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n22" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">22</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">商务部等9部门：科技兴商意见，实施“人工智能+制造”，丰富机器人、家居等智能商品</div>
+    <div class="news-meta">10-19 10:14 · <a href="https://www.mofcom.gov.cn/zcfb/zc/art/2026/art_202618c40d1943e9abfed97cef83e671.html" target="_blank" rel="noopener">商务部</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">AI终端</span><span class="sector-pill">消费电子</span><span class="sector-pill">智能家居</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603626"><span class="code">603626</span><span class="name">科森科技</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="001323"><span class="code">001323</span><span class="name">慕思股份</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002475"><span class="code">002475</span><span class="name">立讯精密</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n23" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">23</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">商务部、科技部拟修订禁止和限制出口技术目录，增列AI、生物医药、光伏约40项</div>
+    <div class="news-meta">10-16公告/10-19 08:00 · <a href="https://www.cls.cn/detail/2507796" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">AI</span><span class="sector-pill">生物医药</span><span class="sector-pill">光伏</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002230"><span class="code">002230</span><span class="name">科大讯飞</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600276"><span class="code">600276</span><span class="name">恒瑞医药</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601012"><span class="code">601012</span><span class="name">隆基绿能</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n24" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">24</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">吴清：高度警惕境外挂钩A股个股的杠杆产品；支持证券业并购重组</div>
+    <div class="news-meta">10-19 17:11 · <a href="https://www.cls.cn/detail/2508626" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">券商</span><span class="sector-pill">跨境衍生品监管</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601995"><span class="code">601995</span><span class="name">中金公司</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600999"><span class="code">600999</span><span class="name">招商证券</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n25" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">25</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">发改委就电力现货市场基本规则征求意见；江苏零售市场指引推动批发价向零售传导</div>
+    <div class="news-meta">10-19 12:02 · <a href="https://www.cls.cn/detail/2508077" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">电力</span><span class="sector-pill">售电</span><span class="sector-pill">储能</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603693"><span class="code">603693</span><span class="name">江苏新能</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002608"><span class="code">002608</span><span class="name">江苏国信</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600032"><span class="code">600032</span><span class="name">浙江新能</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n26" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">26</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">国家能源局：全国统一电力市场信用评价指引征求意见，A级主体享激励</div>
+    <div class="news-meta">10-19 18:17 · <a href="https://www.cls.cn/detail/2508747" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">电力交易</span><span class="sector-pill">独立储能</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600406"><span class="code">600406</span><span class="name">国电南瑞</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600011"><span class="code">600011</span><span class="name">华能国际</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600900"><span class="code">600900</span><span class="name">长江电力</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n27" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">27</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">统计局：前三季度电子电路制造业投资+58.7%，集成电路制造业+14.2%</div>
+    <div class="news-meta">10-19 11:40 · <a href="https://www.cls.cn/detail/2508038" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">PCB</span><span class="sector-pill">半导体</span><span class="sector-pill">IT服务</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="605258"><span class="code">605258</span><span class="name">协和电子</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002463"><span class="code">002463</span><span class="name">沪电股份</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002938"><span class="code">002938</span><span class="name">鹏鼎控股</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n28" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">28</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">生益科技前三季度预增164%—181%；生益电子预增68%—75%</div>
+    <div class="news-meta">10-19 08:00 · <a href="https://www.cls.cn/detail/2507796" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">覆铜板</span><span class="sector-pill">PCB</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600183"><span class="code">600183</span><span class="name">生益科技</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="605258"><span class="code">605258</span><span class="name">协和电子</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002463"><span class="code">002463</span><span class="name">沪电股份</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n29" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">29</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">巴克莱：10月DDR5现货价环比+8%，三个月涨20%</div>
+    <div class="news-meta">10-19 10:31 · <a href="https://www.cls.cn/detail/2507961" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">存储芯片</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603986"><span class="code">603986</span><span class="name">兆易创新</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="001309"><span class="code">001309</span><span class="name">德明利</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="000021"><span class="code">000021</span><span class="name">深科技</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n30" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">30</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">CPO局部回暖，天洋新材涨停；南昌光学企业光模块组件订单排到2027年底</div>
+    <div class="news-meta">10-19 10:44/23:13 · <a href="https://www.cls.cn/detail/2507971" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">CPO</span><span class="sector-pill">光模块</span><span class="sector-pill">光学元件</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603330"><span class="code">603330</span><span class="name">天洋新材</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002281"><span class="code">002281</span><span class="name">光迅科技</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="000988"><span class="code">000988</span><span class="name">华工科技</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n31" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">31</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">星网锐捷Q3净利+100%；锐捷网络数据中心交换机订单加速交付</div>
+    <div class="news-meta">10-19 16:28/20:02 · <a href="https://stock.10jqka.com.cn/20261019/c680848756.shtml" target="_blank" rel="noopener">同花顺 / 财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">数据中心交换机</span><span class="sector-pill">网络设备</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002396"><span class="code">002396</span><span class="name">星网锐捷</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="000938"><span class="code">000938</span><span class="name">紫光股份</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="000063"><span class="code">000063</span><span class="name">中兴通讯</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n32" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">32</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">科大讯飞三季报：前三季度净利+132.83%，但扣非仍亏7.63亿元</div>
+    <div class="news-meta">10-19 16:05 · <a href="https://www.cls.cn/detail/2508509" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">AI应用</span><span class="sector-pill">教育AI</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002230"><span class="code">002230</span><span class="name">科大讯飞</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="002368"><span class="code">002368</span><span class="name">太极股份</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603859"><span class="code">603859</span><span class="name">能科科技</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n33" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">33</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">RISC-V中国峰会：首颗服务器级RISC-V CPU发布；中兴微展出智算CPU</div>
+    <div class="news-meta">10-19 16:55/21:22 · <a href="https://www.21jingji.com/article/20261019/herald/8a096234317078000df2e7a7b4eb0515.html" target="_blank" rel="noopener">21经济网</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">RISC-V</span><span class="sector-pill">国产CPU</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="000063"><span class="code">000063</span><span class="name">中兴通讯</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="603986"><span class="code">603986</span><span class="name">兆易创新</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="603019"><span class="code">603019</span><span class="name">中科曙光</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n34" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">34</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">摩根士丹利：2027年数据中心新增算力将同比激增48%，达32吉瓦</div>
+    <div class="news-meta">10-19 08:00 · <a href="https://www.cls.cn/detail/2507796" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">算力</span><span class="sector-pill">液冷</span><span class="sector-pill">AI用电</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="601138"><span class="code">601138</span><span class="name">工业富联</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002837"><span class="code">002837</span><span class="name">英维克</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="603019"><span class="code">603019</span><span class="name">中科曙光</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n35" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">35</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">弗若斯特沙利文：上半年全球人形机器人销量3.6万台，已超2025全年</div>
+    <div class="news-meta">10-19 08:00 · <a href="https://www.cls.cn/detail/2507796" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">人形机器人</span><span class="sector-pill">汽车零部件</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603286"><span class="code">603286</span><span class="name">日盈电子</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="601689"><span class="code">601689</span><span class="name">拓普集团</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002050"><span class="code">002050</span><span class="name">三花智控</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n36" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">36</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">马斯克：Optimus人形机器人和Cybercab将构成特斯拉价值的“绝大部分”</div>
+    <div class="news-meta">10-19 20:33 · <a href="https://www.cls.cn/detail/2508897" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">特斯拉链</span><span class="sector-pill">人形机器人</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603040"><span class="code">603040</span><span class="name">新坐标</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="601689"><span class="code">601689</span><span class="name">拓普集团</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002050"><span class="code">002050</span><span class="name">三花智控</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n37" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">37</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">中国巨石三季报：Q3净利+173.8%，成都玻纤项目投资增至27.48亿元</div>
+    <div class="news-meta">10-19 15:43 · <a href="https://www.cls.cn/detail/2508460" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">玻纤</span><span class="sector-pill">新材料</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600176"><span class="code">600176</span><span class="name">中国巨石</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="002080"><span class="code">002080</span><span class="name">中材科技</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="605006"><span class="code">605006</span><span class="name">山东玻纤</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n38" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">38</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">神火股份三季报：前三季度净利+114.54%，电解铝和煤价上涨</div>
+    <div class="news-meta">10-19 18:03 · <a href="https://www.cls.cn/detail/2508734" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">电解铝</span><span class="sector-pill">有色</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="000933"><span class="code">000933</span><span class="name">神火股份</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="601600"><span class="code">601600</span><span class="name">中国铝业</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="000807"><span class="code">000807</span><span class="name">云铝股份</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n39" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">39</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">璞泰来前三季度净利+33.87%；湖南裕能拟投不超过20亿元扩产磷酸铁锂</div>
+    <div class="news-meta">10-19 16:21/18:54 · <a href="https://www.cls.cn/detail/2508529" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">锂电材料</span><span class="sector-pill">储能</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603659"><span class="code">603659</span><span class="name">璞泰来</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="002709"><span class="code">002709</span><span class="name">天赐材料</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002460"><span class="code">002460</span><span class="name">赣锋锂业</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n40" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">40</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">国产卫星互联网首次实现北极、南极、青藏高原联网通信</div>
+    <div class="news-meta">10-19 10:28 · <a href="https://www.cls.cn/detail/2507960" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">卫星互联网</span><span class="sector-pill">商业航天</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600118"><span class="code">600118</span><span class="name">中国卫星</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600879"><span class="code">600879</span><span class="name">航天电子</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002465"><span class="code">002465</span><span class="name">海格通信</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n41" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">41</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">珠海航展门票开售、首开海上展区；军工活跃，甘化科工回封2连板</div>
+    <div class="news-meta">10-19 11:24 · <a href="https://www.cls.cn/detail/2508012" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">军工</span><span class="sector-pill">航空装备</span><span class="sector-pill">无人机</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="000576"><span class="code">000576</span><span class="name">甘化科工</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="600435"><span class="code">600435</span><span class="name">北方导航</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600760"><span class="code">600760</span><span class="name">中航沈飞</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n42" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">42</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">低空经济活跃：特斯拉二代Roadster展示短暂腾空，保隆、京城、万丰等2连板</div>
+    <div class="news-meta">10-19 09:29 · <a href="https://www.cls.cn/detail/2507881" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">低空经济</span><span class="sector-pill">eVTOL</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600860"><span class="code">600860</span><span class="name">京城股份</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603197"><span class="code">603197</span><span class="name">保隆科技</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="002085"><span class="code">002085</span><span class="name">万丰奥威</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n43" data-cat="政策面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">43</span><span class="tag 政策面">政策面</span></div>
+    <div class="news-title">工信部就《国家车联网技术标准体系建设指南（2026版）》征求意见</div>
+    <div class="news-meta">10-19 19:13 · <a href="https://www.cls.cn/detail/2508828" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">车联网</span><span class="sector-pill">智能驾驶</span><span class="sector-pill">汽车电子</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="002920"><span class="code">002920</span><span class="name">德赛西威</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002405"><span class="code">002405</span><span class="name">四维图新</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="603197"><span class="code">603197</span><span class="name">保隆科技</span><span><span class="lbl zt">当天涨停</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n44" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">44</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">染料涨价：还原物年内涨600%、H酸涨275%，亚邦股份涨停</div>
+    <div class="news-meta">10-19 09:45 · <a href="https://www.cls.cn/detail/2507899" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">染料</span><span class="sector-pill">化工中间体</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="603188"><span class="code">603188</span><span class="name">亚邦股份</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="600352"><span class="code">600352</span><span class="name">浙江龙盛</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002440"><span class="code">002440</span><span class="name">闰土股份</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n45" data-cat="行业面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">45</span><span class="tag 行业面">行业面</span></div>
+    <div class="news-title">光伏组件能效新国标2027年实施；光伏协会推动低效产能退出</div>
+    <div class="news-meta">10-19 12:57 · <a href="https://www.cls.cn/detail/2508122" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">光伏</span><span class="sector-pill">反内卷</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="601012"><span class="code">601012</span><span class="name">隆基绿能</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600438"><span class="code">600438</span><span class="name">通威股份</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002459"><span class="code">002459</span><span class="name">晶澳科技</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n46" data-cat="市场面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">46</span><span class="tag 市场面">市场面</span></div>
+    <div class="news-title">银行逆势走强，工商银行创历史新高；21家上市银行拟中期派息超2600亿元</div>
+    <div class="news-meta">10-19 09:52 · <a href="https://www.cls.cn/detail/2507902" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">银行</span><span class="sector-pill">高股息</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="601398"><span class="code">601398</span><span class="name">工商银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601939"><span class="code">601939</span><span class="name">建设银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600036"><span class="code">600036</span><span class="name">招商银行</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n47" data-cat="市场面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">47</span><span class="tag 市场面">市场面</span></div>
+    <div class="news-title">盘后11家公司披露回购或增持：金发科技3—5亿元、裕同科技2—4亿元、良信股份等</div>
+    <div class="news-meta">10-19 22:20 · <a href="https://www.cls.cn/detail/2508999" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">回购主题</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600143"><span class="code">600143</span><span class="name">金发科技</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="002831"><span class="code">002831</span><span class="name">裕同科技</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span><span class="stock-chip" data-code="002706"><span class="code">002706</span><span class="name">良信股份</span><span><span class="lbl ld">行业地位</span><span class="lbl gg">公告</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n48" data-cat="市场面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">48</span><span class="tag 市场面">市场面</span></div>
+    <div class="news-title">国内商品：焦煤跌超5%，盘中一度跌6%至1396元/吨</div>
+    <div class="news-meta">10-19 15:00 · <a href="https://www.cls.cn/detail/2508313" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">煤炭（偏空）</span><span class="sector-pill">焦化</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="000983"><span class="code">000983</span><span class="name">山西焦煤</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601699"><span class="code">601699</span><span class="name">潞安环能</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601666"><span class="code">601666</span><span class="name">平煤股份</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n49" data-cat="市场面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">49</span><span class="tag 市场面">市场面</span></div>
+    <div class="news-title">伊朗称将主张霍尔木兹海峡控制权；布油跌约2.6%失守107美元</div>
+    <div class="news-meta">10-19 15:29/23:56 · <a href="https://www.cls.cn/detail/2509039" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">油运</span><span class="sector-pill">油气</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600026"><span class="code">600026</span><span class="name">中远海能</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601872"><span class="code">601872</span><span class="name">招商轮船</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601857"><span class="code">601857</span><span class="name">中国石油</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+<article class="news-row" data-news-id="n50" data-cat="市场面">
+  <div class="card news-card" tabindex="0"><div><span class="rank">50</span><span class="tag 市场面">市场面</span></div>
+    <div class="news-title">9月70城房价：一线新房环比+0.1%，一二三线同比降幅收窄</div>
+    <div class="news-meta">10-19 09:31 · <a href="https://www.cls.cn/detail/2507887" target="_blank" rel="noopener">财联社</a></div></div>
+  <div class="card sectors-card"><h3>发酵板块</h3><div><span class="sector-pill">地产</span></div></div>
+  <div class="card stocks-card"><h3>关注三只票</h3><div><span class="stock-chip" data-code="600048"><span class="code">600048</span><span class="name">保利发展</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="001979"><span class="code">001979</span><span class="name">招商蛇口</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="000002"><span class="code">000002</span><span class="name">万科A</span><span><span class="lbl ld">行业地位</span></span></span></div></div>
+</article>
+  </div>
+  <h2 class="section-title">即将发生的大事</h2>
+  <div class="timeline-box" id="timelineBox"><div class="timeline" id="timeline">
+<div class="t-node" data-event-id="e01" data-sort-key="20261020" tabindex="0">
+  <div class="t-date">10-20 · 09:00 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">LPR报价公布</div>
+  <div class="t-body"><span class="sector-pill">银行</span><span class="sector-pill">利率</span><span class="stock-chip" data-code="601398"><span class="code">601398</span><span class="name">工商银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601939"><span class="code">601939</span><span class="name">建设银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601288"><span class="code">601288</span><span class="name">农业银行</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e02" data-sort-key="20261020" tabindex="0">
+  <div class="t-date">10-20 · 全天 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">金融街论坛·保险大会开幕（发布保险业改革重大成果）</div>
+  <div class="t-body"><span class="sector-pill">保险</span><span class="sector-pill">银行</span><span class="stock-chip" data-code="601318"><span class="code">601318</span><span class="name">中国平安</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601601"><span class="code">601601</span><span class="name">中国太保</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601628"><span class="code">601628</span><span class="name">中国人寿</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e03" data-sort-key="20261020" tabindex="0">
+  <div class="t-date">10-20 · 10:00 / 15:00 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">发改委新闻发布会；国新办工信发展发布会</div>
+  <div class="t-body"><span class="sector-pill">宏观</span><span class="sector-pill">制造业</span><span class="sector-pill">AI通信</span><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601138"><span class="code">601138</span><span class="name">工业富联</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="000063"><span class="code">000063</span><span class="name">中兴通讯</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e04" data-sort-key="20261020" tabindex="0">
+  <div class="t-date">10-20—21 · 持续 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">中国汽车供应链大会（开封）继续举行</div>
+  <div class="t-body"><span class="sector-pill">汽车零部件</span><span class="sector-pill">车规芯片</span><span class="stock-chip" data-code="002085"><span class="code">002085</span><span class="name">万丰奥威</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603197"><span class="code">603197</span><span class="name">保隆科技</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603348"><span class="code">603348</span><span class="name">文灿股份</span><span><span class="lbl zt">当天涨停</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e05" data-sort-key="20261020" tabindex="0">
+  <div class="t-date">10-20—22 · 开幕 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">英伟达GTC柏林大会（主题演讲10-21约北京17:00；GR00T专场10-22）</div>
+  <div class="t-body"><span class="sector-pill">物理AI</span><span class="sector-pill">人形机器人</span><span class="stock-chip" data-code="003021"><span class="code">003021</span><span class="name">兆威机电</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="603119"><span class="code">603119</span><span class="name">浙江荣泰</span><span><span class="lbl zt">当天涨停</span></span></span><span class="stock-chip" data-code="601689"><span class="code">601689</span><span class="name">拓普集团</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e06" data-sort-key="20261021" tabindex="0">
+  <div class="t-date">10-21 · 全天 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">金融街论坛主论坛（证监会承办）；耐心资本圆桌、金融科技子论坛</div>
+  <div class="t-body"><span class="sector-pill">券商</span><span class="sector-pill">金融科技</span><span class="sector-pill">北交所</span><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601995"><span class="code">601995</span><span class="name">中金公司</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601688"><span class="code">601688</span><span class="name">华泰证券</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e07" data-sort-key="20261021" tabindex="0">
+  <div class="t-date">10-21 · 解禁 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">中船特气等解禁（约596亿元量级，信息技术为主）</div>
+  <div class="t-body"><span class="sector-pill">解禁（风险）</span><span class="sector-pill">半导体材料</span><span class="stock-chip" data-code="603225"><span class="code">603225</span><span class="name">新凤鸣</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002653"><span class="code">002653</span><span class="name">海思科</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="001309"><span class="code">001309</span><span class="name">德明利</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e08" data-sort-key="20261022" tabindex="0">
+  <div class="t-date">10-22 · 清晨（约） <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">Meta、特斯拉美东10/21盘后发布Q3财报（北京时间约10/22清晨）</div>
+  <div class="t-body"><span class="sector-pill">AI交易</span><span class="sector-pill">特斯拉链</span><span class="sector-pill">人形机器人</span><span class="stock-chip" data-code="601689"><span class="code">601689</span><span class="name">拓普集团</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002050"><span class="code">002050</span><span class="name">三花智控</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002085"><span class="code">002085</span><span class="name">万丰奥威</span><span><span class="lbl zt">当天涨停</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e09" data-sort-key="20261022" tabindex="0">
+  <div class="t-date">10-22 · 全天 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">金融街论坛外汇局专场与闭幕式</div>
+  <div class="t-body"><span class="sector-pill">外汇</span><span class="sector-pill">券商</span><span class="sector-pill">人民币资产</span><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601995"><span class="code">601995</span><span class="name">中金公司</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601398"><span class="code">601398</span><span class="name">工商银行</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e10" data-sort-key="20261023" tabindex="0">
+  <div class="t-date">10-23 · 起 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">首批18只主动管理型ETF全面发行</div>
+  <div class="t-body"><span class="sector-pill">公募ETF</span><span class="sector-pill">券商</span><span class="stock-chip" data-code="600030"><span class="code">600030</span><span class="name">中信证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601688"><span class="code">601688</span><span class="name">华泰证券</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601995"><span class="code">601995</span><span class="name">中金公司</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e11" data-sort-key="20261103" tabindex="0">
+  <div class="t-date">11-03 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">美国中期选举</div>
+  <div class="t-body"><span class="sector-pill">外围风险偏好</span><span class="sector-pill">汇率</span><span class="stock-chip" data-code="601398"><span class="code">601398</span><span class="name">工商银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600036"><span class="code">600036</span><span class="name">招商银行</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="601318"><span class="code">601318</span><span class="name">中国平安</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e12" data-sort-key="20261118" tabindex="0">
+  <div class="t-date">11-18 · 生效 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">盾构机/无人机等出口管制措施生效</div>
+  <div class="t-body"><span class="sector-pill">工程机械</span><span class="sector-pill">民用无人机</span><span class="stock-chip" data-code="600528"><span class="code">600528</span><span class="name">中铁工业</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002389"><span class="code">002389</span><span class="name">航天彩虹</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002085"><span class="code">002085</span><span class="name">万丰奥威</span><span><span class="lbl zt">当天涨停</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e13" data-sort-key="20261201" tabindex="0">
+  <div class="t-date">12-01 · 生效 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">证监会《违规转让证券案件行政处罚实施规则》施行</div>
+  <div class="t-body"><span class="sector-pill">减持监管</span><span class="sector-pill">解禁股</span><span class="stock-chip" data-code="603225"><span class="code">603225</span><span class="name">新凤鸣</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002653"><span class="code">002653</span><span class="name">海思科</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="001309"><span class="code">001309</span><span class="name">德明利</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e14" data-sort-key="20261207" tabindex="0">
+  <div class="t-date">12-07—13 · 展期 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">第十五届中国航展（珠海），首次开放海上展区</div>
+  <div class="t-body"><span class="sector-pill">军工</span><span class="sector-pill">无人机</span><span class="sector-pill">航空装备</span><span class="stock-chip" data-code="600118"><span class="code">600118</span><span class="name">中国卫星</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600879"><span class="code">600879</span><span class="name">航天电子</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="002389"><span class="code">002389</span><span class="name">航天彩虹</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+<div class="t-node" data-event-id="e15" data-sort-key="20270317" tabindex="0">
+  <div class="t-date">2027-03-17—19 · 定档 <span class="soon-badge" hidden>即将到来</span></div>
+  <div class="t-title">第二届上海商业航天大会</div>
+  <div class="t-body"><span class="sector-pill">商业航天</span><span class="stock-chip" data-code="600118"><span class="code">600118</span><span class="name">中国卫星</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="600879"><span class="code">600879</span><span class="name">航天电子</span><span><span class="lbl ld">行业地位</span></span></span><span class="stock-chip" data-code="000768"><span class="code">000768</span><span class="name">中航西飞</span><span><span class="lbl ld">行业地位</span></span></span></div>
+</div>
+  </div></div>
+  <div class="legend"><strong style="color:#22d3ee">选股说明</strong>：仅主板（不含创业板/科创板/北交所/ST）。<span class="lbl zt">当天涨停</span> 来自 10-19 主板涨停列表；<span class="lbl ld">行业地位</span> 按板块龙头选取；<span class="lbl gg">公告</span> 表示该条新闻含公司自身公告。三只票仅作看板参考，不构成买卖建议。<br><strong style="color:#22d3ee">筛选标准</strong>：从313条中按政策/行业/市场综合重要性排序，取前50。 优先：有明确板块影响，且有政策落地或业绩/订单/行业数据支撑。 次优先：对次日开盘情绪影响大的外盘与解禁类事项。 排除：纯情绪炒作且公司已澄清、无板块映射的个股异动、无法核实的北向资金。 关注股：仅主板（不含300/301/688/北交所/ST）；「当天涨停」必须出现在10-19主板涨停CSV；其余标「行业地位」；公司自身公告加「公告」标签。<br><strong style="color:#22d3ee">数据缺口</strong>：美股仅有盘中数据，无收盘确认。 北向资金无权威可核验数值，未收录。 商业航天、国内创新药当日硬催化偏少。 上海商业航天大会为2027年定档，非近期催化。</div>
+  <p class="footer">数据内嵌于本文件，无需联网 · 来源 news_full_20261019.md · 涨停对照 limitup_main_board_20261019_close.csv</p>
+</div>
+<script>
+(function () {
+  'use strict';
+  function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+  function hasC(el, c) { return (' ' + el.className + ' ').indexOf(' ' + c + ' ') > -1; }
+  function addC(el, c) { if (!hasC(el, c)) el.className = (el.className + ' ' + c).replace(/^\s+/, ''); }
+  function rmC(el, c) { el.className = (' ' + el.className + ' ').replace(' ' + c + ' ', ' ').replace(/^\s+|\s+$/g, ''); }
+  function togC(el, c, on) { if (on) addC(el, c); else rmC(el, c); }
+  var reduceMotion = false;
+  try { reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+  function revealAll() {
+    try {
+      var l = $('#loader'); if (l) addC(l, 'done');
+      addC(document.body, 'ready');
+      $$('.news-row').forEach(function (r) { addC(r, 'visible'); });
+    } catch (e) {}
+  }
+  setTimeout(revealAll, 3500); /* failsafe */
+
+  /* ---- Beijing clock: Intl when available, manual UTC+8 fallback ---- */
+  var WEEK = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function bjParts() {
+    var d = new Date(new Date().getTime() + 8 * 3600 * 1000); /* UTC+8, China has no DST */
+    return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), w: d.getUTCDay(),
+             H: d.getUTCHours(), M: d.getUTCMinutes(), S: d.getUTCSeconds() };
+  }
+  var fmtT = null, fmtD = null;
+  try {
+    fmtT = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+    fmtD = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' });
+  } catch (e) { fmtT = fmtD = null; }
+  function tick() {
+    var p = bjParts(), t, dd;
+    try { t = fmtT ? fmtT.format(new Date()) : null; dd = fmtD ? fmtD.format(new Date()) : null; } catch (e) { t = dd = null; }
+    if (!t || !/^\d{1,2}:\d{2}:\d{2}$/.test(t)) t = pad(p.H) + ':' + pad(p.M) + ':' + pad(p.S);
+    if (t.indexOf('24:') === 0) t = '00' + t.slice(2);
+    if (!dd) dd = p.y + '/' + pad(p.m) + '/' + pad(p.d) + ' ' + WEEK[p.w];
+    var a = $('#clockTime'), b = $('#clockDate');
+    if (a) a.textContent = t; if (b) b.textContent = dd;
+    markSoon(p);
+  }
+
+  /* ---- timeline: mark next upcoming node ---- */
+  var lastKey = -1;
+  function markSoon(p) {
+    var today = p.y * 10000 + p.m * 100 + p.d;
+    if (today === lastKey) return; lastKey = today;
+    var found = false;
+    $$('.t-node').forEach(function (n) {
+      var b = $('.soon-badge', n), on = false;
+      if (!found && +n.getAttribute('data-sort-key') >= today) { on = true; found = true; }
+      togC(n, 'soon', on); if (b) b.hidden = !on;
+    });
+  }
+
+  /* ---- hover / tap linkage ---- */
+  var activeId = null, activeKind = null, lastTouch = 0;
+  function isTouch() { return new Date().getTime() - lastTouch < 800; }
+  function clearHL() {
+    activeId = activeKind = null;
+    $$('.news-row, .t-node').forEach(function (r) { rmC(r, 'dim'); rmC(r, 'hot'); });
+    $$('.sector-pill, .stock-chip').forEach(function (el) { rmC(el, 'lit'); });
+  }
+  function hl(kind, id) {
+    activeKind = kind; activeId = id;
+    $$('.news-row').forEach(function (r) {
+      var on = kind === 'news' && r.getAttribute('data-news-id') === id;
+      togC(r, 'hot', on); togC(r, 'dim', !on);
+      $$('.sector-pill, .stock-chip', r).forEach(function (el) { togC(el, 'lit', on); });
+    });
+    $$('.t-node').forEach(function (r) {
+      var on = kind === 'event' && r.getAttribute('data-event-id') === id;
+      togC(r, 'hot', on); togC(r, 'dim', !on);
+      $$('.sector-pill, .stock-chip', r).forEach(function (el) { togC(el, 'lit', on); });
+    });
+  }
+  function bind(el, kind, attr) {
+    var id = el.getAttribute(attr);
+    el.addEventListener('touchstart', function () { lastTouch = new Date().getTime(); }, { passive: true });
+    el.addEventListener('mouseenter', function () { if (isTouch()) return; hl(kind, id); });
+    el.addEventListener('mouseleave', function () { if (isTouch()) return; if (activeKind === kind && activeId === id) clearHL(); });
+    el.addEventListener('click', function (e) {
+      var t = e.target; while (t && t !== el) { if (t.tagName === 'A') return; t = t.parentNode; }
+      if (activeKind === kind && activeId === id) clearHL(); else hl(kind, id);
+      e.stopPropagation();
+    });
+  }
+  function closest(el, sel) {
+    while (el && el.nodeType === 1) { if (el.matches ? el.matches(sel) : (el.msMatchesSelector && el.msMatchesSelector(sel))) return el; el = el.parentNode; }
+    return null;
+  }
+
+  /* ---- starfield ---- */
+  function stars() {
+    var c = $('#starfield'); if (!c || !c.getContext) return;
+    var ctx = c.getContext('2d'); if (!ctx) return;
+    var w, h, st = [], pt = [];
+    function resize() {
+      w = c.width = window.innerWidth; h = c.height = window.innerHeight; st = []; pt = [];
+      var n = Math.min(160, Math.floor(w * h / 9000)), i;
+      for (i = 0; i < n; i++) st.push({ x: Math.random() * w, y: Math.random() * h, r: Math.random() * 1.4 + 0.2, a: Math.random() * 6 });
+      for (i = 0; i < 28; i++) pt.push({ x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.15, vy: -0.1 - Math.random() * 0.25, r: Math.random() * 1.8 + 0.4 });
+    }
+    resize(); window.addEventListener('resize', resize);
+    var raf = window.requestAnimationFrame || function (f) { return setTimeout(f, 33); };
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      for (var i = 0; i < st.length; i++) {
+        var s = st[i]; if (!reduceMotion) s.a += 0.01;
+        ctx.beginPath(); ctx.fillStyle = 'rgba(180,210,255,' + (0.35 + 0.35 * Math.sin(s.a)) + ')';
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+      }
+      if (!reduceMotion) {
+        for (var j = 0; j < pt.length; j++) {
+          var p = pt[j]; p.x += p.vx; p.y += p.vy;
+          if (p.y < -5) { p.y = h + 5; p.x = Math.random() * w; }
+          var g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
+          g.addColorStop(0, 'rgba(34,211,238,.55)'); g.addColorStop(1, 'rgba(34,211,238,0)');
+          ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2); ctx.fill();
+        }
+        raf(draw);
+      }
+    }
+    draw();
+    if (reduceMotion) window.addEventListener('resize', draw);
+  }
+
+  /* ---- loader ---- */
+  function loader() {
+    var stream = $('#stream'), readout = $('#loadReadout');
+    var glyphs = '01アイウエオΑΒΓΔ◈◇ABCDEF¥$€Σ', txt = '';
+    for (var i = 0; i < 40; i++) { var line = ''; for (var j = 0; j < 80; j++) line += glyphs.charAt(Math.floor(Math.random() * glyphs.length)) + ' '; txt += line + '\n'; }
+    if (stream) stream.textContent = txt;
+    var dur = reduceMotion ? 300 : 2000, t0 = new Date().getTime();
+    var rows = $$('.news-row');
+    rows.forEach(function (r, k) { r.style.transitionDelay = reduceMotion ? '0s' : (0.05 * k) + 's'; });
+    (function step() {
+      var p = Math.min(1, (new Date().getTime() - t0) / dur);
+      if (readout) readout.textContent = '同步北京节点… ' + Math.floor(p * 100) + '% · 链路加密 · 星图校准';
+      if (p < 1) setTimeout(step, 40); else revealAll();
+    })();
+  }
+
+  function init() {
+    try { tick(); setInterval(tick, 1000); } catch (e) { if (window.console) console.warn('clock', e); }
+    try {
+      $$('.news-row').forEach(function (r) { bind(r, 'news', 'data-news-id'); });
+      $$('.t-node').forEach(function (r) { bind(r, 'event', 'data-event-id'); });
+      document.addEventListener('click', function (e) { if (!closest(e.target, '.news-row') && !closest(e.target, '.t-node') && !closest(e.target, '.filters')) clearHL(); });
+      var f = $('#filters');
+      if (f) f.addEventListener('click', function (e) {
+        var btn = closest(e.target, 'button'); if (!btn) return;
+        var cat = btn.getAttribute('data-cat');
+        $$('#filters button').forEach(function (b) { togC(b, 'active', b === btn); });
+        clearHL();
+        $$('.news-row').forEach(function (r) { togC(r, 'hidden-cat', cat !== '全部' && r.getAttribute('data-cat') !== cat); });
+      });
+    } catch (e) { if (window.console) console.warn('linkage', e); }
+    try { stars(); } catch (e) { if (window.console) console.warn('stars', e); }
+    try { loader(); } catch (e) { revealAll(); }
+  }
+  try {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  } catch (e) { revealAll(); }
+})();
+
+</script>
+</body>
+</html>
